@@ -1,0 +1,18 @@
+.cache/
+/alloy-demo/
+/generated/
+/logs-only/
+/metrics-only/
+/prod-alloy/
+/alloygen
+/alloygen.exe
+
+# Local secrets and credentials must never be committed.
+.env
+.env.*
+*.env
+*token*
+*secret*
+*credential*
+*kubeconfig*
+kubeconfig

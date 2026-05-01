@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NAMESPACE="{{ .Namespace }}"
+RELEASE_NAME="alloy"
+
+echo "Uninstalling Grafana Alloy release '${RELEASE_NAME}' from namespace '${NAMESPACE}'."
+helm uninstall "${RELEASE_NAME}" -n "${NAMESPACE}"
+
+echo "Alloy uninstall requested."
+echo "Namespace '${NAMESPACE}' was not deleted."
+echo "Warning: cluster roles, CRDs, persistent data, or backend resources may remain depending on your chart and cluster settings."
+
