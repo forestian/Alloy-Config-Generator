@@ -6,7 +6,7 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
+      tag_name:
         description: "Existing release tag to build and upload assets for, for example v1.0.0"
         required: true
         type: string
@@ -17,7 +17,7 @@ permissions:
 env:
   BINARY_NAME: alloygen
   PACKAGE_PATH: .
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref_name }}
 
 jobs:
   validate:
@@ -35,7 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -92,7 +92,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -153,7 +153,17 @@ jobs:
           sha256sum *.tar.gz > checksums.txt
           cat checksums.txt
 
+      - name: Upload assets to existing release
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null
+          gh release upload "${RELEASE_TAG}" dist/*.tar.gz dist/checksums.txt --repo "${GITHUB_REPOSITORY}" --clobber
+
       - name: Upload GitHub Release assets
+        if: github.event_name != 'workflow_dispatch'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
