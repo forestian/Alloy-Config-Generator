@@ -18,6 +18,26 @@ Run from source:
 go run . version
 ```
 
+## Install from GitHub Releases
+
+Download a prebuilt binary from the GitHub Releases page.
+
+Linux/macOS:
+
+```sh
+tar -xzf <archive>.tar.gz
+chmod +x alloygen
+./alloygen version
+```
+
+Windows:
+
+Download the Windows archive, extract it, and run:
+
+```powershell
+alloygen.exe version
+```
+
 ## Commands
 
 ```sh
@@ -102,4 +122,3 @@ Use Kubernetes Secrets, an external secret operator, or Helm secret management w
 - Optional GitHub Action integration.
 - Optional config validation against local Alloy.
 - Optional Grafana Cloud, Vault, and Helm chart version helpers.
-

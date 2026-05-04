@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and upload assets for, for example v1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: alloygen
+  PACKAGE_PATH: .
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check release tag
+        shell: bash
+        run: |
+          if [[ "${RELEASE_TAG}" != v* ]]; then
+            echo "Release tag must start with v. Got: ${RELEASE_TAG}"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check gofmt
+        shell: bash
+        run: |
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(git ls-files '*.go')
+
+          if ((${#files[@]} == 0)); then
+            exit 0
+          fi
+
+          unformatted="$(gofmt -l "${files[@]}")"
+          if [[ -n "${unformatted}" ]]; then
+            echo "These files need gofmt:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Test
+        run: go test ./...
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build and package
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          version="${RELEASE_TAG#v}"
+          module_path="$(go list -m)"
+          binary="${BINARY_NAME}"
+          if [[ "${GOOS}" == "windows" ]]; then
+            binary="${binary}.exe"
+          fi
+
+          archive="${BINARY_NAME}_${RELEASE_TAG}_${GOOS}_${GOARCH}.tar.gz"
+          mkdir -p build/package dist
+
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X ${module_path}/cmd.Version=${version}" \
+            -o "build/package/${binary}" \
+            "${PACKAGE_PATH}"
+
+          tar -C build/package -czf "dist/${archive}" "${binary}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_${{ env.RELEASE_TAG }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release assets
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Upload GitHub Release assets
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          fail_on_unmatched_files: true
+          overwrite_files: true
